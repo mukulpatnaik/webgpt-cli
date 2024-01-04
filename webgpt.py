@@ -2,7 +2,7 @@
 
 import re
 import sys
-
+import argparse
 import openai
 import requests
 from bs4 import BeautifulSoup
@@ -13,7 +13,17 @@ import os
 # supress warnings
 warnings.filterwarnings("ignore")
 
-query = sys.argv[1]
+parser = argparse.ArgumentParser(description='Use GPT-3 with multi-shot prompting to generate summaries from the web.')
+parser.add_argument('query', type=str, help='the query to generate text from')
+parser.add_argument('-m', '--model', type=str, default='text-davinci-003', help='the GPT-3 model to use')
+parser.add_argument('-t', '--temperature', type=float, default=0.8, help='the sampling temperature')
+parser.add_argument('-max', '--max-tokens', type=int, default=800, help='the maximum number of tokens to generate')
+parser.add_argument('-n', '--num-results', type=int, default=3, help='the number of results to return')
+
+# Parse the arguments
+args = parser.parse_args()
+
+query = args.query
 
 # Using this class to supress the output of the search function
 class HiddenPrints:
@@ -30,7 +40,7 @@ def search(query):
 
   hl =  "en"
   gl = "us"
-  key = ""
+  key = os.getenv('SERPAPI_KEY')
 
   params = {
     "q": query,
@@ -43,6 +53,7 @@ def search(query):
   results = search.get_dict()
 
   links = []
+  print(results)
   for i in results["organic_results"]:
       links.append(i['link'])
   
@@ -70,7 +81,7 @@ def scrape(url):
 # This function uses the GPT-3 API to generate a summary
 def gpt(prompt):
     openai.api_key = os.getenv("OPENAI_API_KEY")
-    r = openai.Completion.create(model="text-davinci-003", prompt=prompt, temperature=0.2, max_tokens=500)
+    r = openai.Completion.create(model=args.model, prompt=prompt, temperature=args.temperature, max_tokens=args.max_tokens)
     response = r.choices[0]['text']
 
     return response
@@ -82,7 +93,7 @@ with HiddenPrints():
         links = search(query)
         results = []
 
-        for i in links[:2]:
+        for i in links[:args.num_results]:
 
             txt = scrape(i)[:1000]
             if len(txt) < 500:
@@ -106,7 +117,7 @@ with HiddenPrints():
             results.append(a)
         return results
 
-    data = process(query)
+    data = process(args.query)
 
 # This function prints the results in a nice format
 def output(query, data):
@@ -123,4 +134,4 @@ def output(query, data):
         print('')
 
 
-output(query, data)
+output(args.query, data)
